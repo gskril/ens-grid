@@ -8,13 +8,16 @@ const CELL_SIZE = AVATAR_SIZE + GAP
 interface Profile {
   name: string
   avatarUrl: string
+  address?: string
   description?: string
   url?: string
   twitter?: string
+  github?: string
   discord?: string
   email?: string
 }
 
+const API_BASE = 'https://ens-api.gregskril.com'
 const profileCache = new Map<string, Profile | null>()
 let viewportX = 0
 let viewportY = 0
@@ -45,8 +48,9 @@ function getNameForCell(col: number, row: number): string {
   return ensNames[index]
 }
 
-function getAvatarUrl(name: string): string {
-  return `https://metadata.ens.domains/mainnet/avatar/${name}`
+function getAvatarUrl(name: string, size: 'sm' | 'md' = 'sm'): string {
+  const width = size === 'md' ? 256 : 160
+  return `${API_BASE}/avatar/${name}?width=${width}&fallback=false`
 }
 
 async function fetchProfile(name: string): Promise<Profile | null> {
@@ -55,7 +59,8 @@ async function fetchProfile(name: string): Promise<Profile | null> {
   }
 
   try {
-    const response = await fetch(`https://enstate.rs/n/${name}`)
+    const texts = 'description,com.twitter,com.github,url,email,com.discord'
+    const response = await fetch(`${API_BASE}/name/${name}?texts=${texts}`)
     if (!response.ok) {
       profileCache.set(name, null)
       return null
@@ -63,12 +68,14 @@ async function fetchProfile(name: string): Promise<Profile | null> {
     const data = await response.json()
     const profile: Profile = {
       name,
-      avatarUrl: getAvatarUrl(name),
-      description: data.records?.['description'] || data.records?.['com.twitter'] || '',
-      url: data.records?.['url'],
-      twitter: data.records?.['com.twitter'],
-      discord: data.records?.['com.discord'],
-      email: data.records?.['email'],
+      avatarUrl: data.avatar?.md || getAvatarUrl(name, 'md'),
+      address: data.address,
+      description: data.texts?.['description'] || '',
+      url: data.texts?.['url'],
+      twitter: data.texts?.['com.twitter'],
+      github: data.texts?.['com.github'],
+      discord: data.texts?.['com.discord'],
+      email: data.texts?.['email'],
     }
     profileCache.set(name, profile)
     return profile
@@ -146,7 +153,7 @@ async function openModal(name: string) {
   const descEl = modal.querySelector('.modal-description') as HTMLElement
   const linksEl = modal.querySelector('.modal-links') as HTMLElement
 
-  avatarImg.src = getAvatarUrl(name)
+  avatarImg.src = getAvatarUrl(name, 'md')
   nameEl.textContent = name
 
   if (profile) {
@@ -158,6 +165,10 @@ async function openModal(name: string) {
     if (profile.twitter) {
       const handle = profile.twitter.replace('@', '')
       linksHtml += `<a href="https://x.com/${handle}" target="_blank" rel="noopener">@${handle}</a>`
+    }
+    if (profile.github) {
+      const handle = profile.github.replace('@', '')
+      linksHtml += `<a href="https://github.com/${handle}" target="_blank" rel="noopener">github/${handle}</a>`
     }
     if (profile.discord) {
       linksHtml += `<span>Discord: ${profile.discord}</span>`
