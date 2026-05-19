@@ -90257,4 +90257,6 @@ export const ensNames: string[] = [
   'joyinlife.eth',
   'hyokie.eth',
   'dumperchad.eth',
+  'nick.eth',
+  'jefflau.eth',
 ]
