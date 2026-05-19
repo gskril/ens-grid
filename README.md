@@ -7,8 +7,8 @@ Built with Vite + TypeScript, deployed as static assets via Cloudflare Workers. 
 ## Local development
 
 ```sh
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Then open the URL printed by Vite (usually `http://localhost:5173`).
@@ -16,8 +16,8 @@ Then open the URL printed by Vite (usually `http://localhost:5173`).
 ## Build
 
 ```sh
-npm run build      # type-check + build to ./dist
-npm run preview    # preview the production build locally
+bun run build      # type-check + build to ./dist
+bun run preview    # preview the production build locally
 ```
 
 The list of names rendered on the grid lives in `src/names.ts`.
