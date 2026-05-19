@@ -7,21 +7,25 @@ import {
   useState,
 } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { animate, spring, type AnimationPlaybackControls } from 'motion'
 import { ensNames } from './names'
 import { AvatarCell } from './AvatarCell'
 
 const AVATAR_SIZE = 80
 const GAP = 8
 const CELL_SIZE = AVATAR_SIZE + GAP
-const MAX_FRAME_MS = 32
-const MIN_SETTLE_DISTANCE = 1.5
-const MIN_SETTLE_SPEED = 0.04
-const SPRING_STRENGTH = 0.00025
-const DAMPING = 0.01
 const VELOCITY_SMOOTHING = 0.35
 const RELEASE_PROJECTION_MS = 260
 const MAX_RELEASE_SPEED = 0.7
 const MAX_RELEASE_DISTANCE = CELL_SIZE * 2
+const RELEASE_SPRING = {
+  type: spring,
+  stiffness: 320,
+  damping: 46,
+  mass: 1,
+  restDelta: 0.5,
+  restSpeed: 12,
+}
 
 function getNameForCell(col: number, row: number): string {
   const index = Math.abs((col * 7919 + row * 104729) % ensNames.length)
@@ -124,7 +128,8 @@ export function Grid() {
   const sizeRef = useRef<Size>(getSize())
   const layerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number | null>(null)
-  const motionFrameRef = useRef<number | null>(null)
+  const releaseAnimationsRef = useRef<AnimationPlaybackControls[]>([])
+  const releaseAnimationIdRef = useRef(0)
   const prefersReducedMotionRef = useRef(false)
   const gridWindowRef = useRef<GridWindow>(
     getGridWindow(viewportRef.current, sizeRef.current),
@@ -166,10 +171,9 @@ export function Grid() {
   }, [renderViewport])
 
   const stopReleaseMotion = useCallback(() => {
-    if (motionFrameRef.current !== null) {
-      cancelAnimationFrame(motionFrameRef.current)
-      motionFrameRef.current = null
-    }
+    releaseAnimationIdRef.current += 1
+    releaseAnimationsRef.current.forEach((animation) => animation.stop())
+    releaseAnimationsRef.current = []
   }, [])
 
   const settleViewport = useCallback(
@@ -182,72 +186,52 @@ export function Grid() {
         return
       }
 
-      let lastTime = performance.now()
       const releaseVelocity = limitVector(
         velocityX,
         velocityY,
         MAX_RELEASE_SPEED,
       )
-      let vx = releaseVelocity.x
-      let vy = releaseVelocity.y
-      const target = getReleaseTarget(viewportRef.current, vx, vy)
+      const target = getReleaseTarget(
+        viewportRef.current,
+        releaseVelocity.x,
+        releaseVelocity.y,
+      )
+      const animationId = releaseAnimationIdRef.current + 1
+      releaseAnimationIdRef.current = animationId
+      const latest = { ...viewportRef.current }
 
-      const tick = (time: number) => {
-        const dt = Math.min(time - lastTime, MAX_FRAME_MS)
-        lastTime = time
-
-        const viewport = viewportRef.current
-        const distanceX = target.x - viewport.x
-        const distanceY = target.y - viewport.y
-
-        vx += distanceX * SPRING_STRENGTH * dt
-        vy += distanceY * SPRING_STRENGTH * dt
-
-        const damping = Math.exp(-DAMPING * dt)
-        vx *= damping
-        vy *= damping
-
-        let nextX = viewport.x + vx * dt
-        let nextY = viewport.y + vy * dt
-
-        if (
-          distanceX !== 0 &&
-          Math.sign(target.x - nextX) !== Math.sign(distanceX)
-        ) {
-          nextX = target.x
-          vx = 0
-        }
-        if (
-          distanceY !== 0 &&
-          Math.sign(target.y - nextY) !== Math.sign(distanceY)
-        ) {
-          nextY = target.y
-          vy = 0
-        }
-
-        viewportRef.current = {
-          x: nextX,
-          y: nextY,
-        }
+      const commitLatest = () => {
+        viewportRef.current = latest
         renderViewport()
-
-        const nextDistance = Math.hypot(
-          target.x - viewportRef.current.x,
-          target.y - viewportRef.current.y,
-        )
-        const speed = Math.hypot(vx, vy)
-
-        if (nextDistance < MIN_SETTLE_DISTANCE && speed < MIN_SETTLE_SPEED) {
-          viewportRef.current = target
-          renderViewport()
-          motionFrameRef.current = null
-          return
-        }
-
-        motionFrameRef.current = requestAnimationFrame(tick)
       }
 
-      motionFrameRef.current = requestAnimationFrame(tick)
+      const xAnimation = animate(latest.x, target.x, {
+        ...RELEASE_SPRING,
+        velocity: releaseVelocity.x * 1000,
+        onUpdate: (value) => {
+          latest.x = value
+          commitLatest()
+        },
+      })
+
+      const yAnimation = animate(latest.y, target.y, {
+        ...RELEASE_SPRING,
+        velocity: releaseVelocity.y * 1000,
+        onUpdate: (value) => {
+          latest.y = value
+          commitLatest()
+        },
+      })
+
+      releaseAnimationsRef.current = [xAnimation, yAnimation]
+      Promise.all([xAnimation.finished, yAnimation.finished])
+        .then(() => {
+          if (releaseAnimationIdRef.current !== animationId) return
+          viewportRef.current = target
+          renderViewport()
+          releaseAnimationsRef.current = []
+        })
+        .catch(() => {})
     },
     [renderViewport, stopReleaseMotion],
   )
