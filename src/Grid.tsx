@@ -266,6 +266,7 @@ export function Grid() {
   const viewportRef = useRef<Viewport>({ x: 0, y: 0 })
   const sizeRef = useRef<Size>(getSize())
   const layerRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const frameRef = useRef<number | null>(null)
   const releaseAnimationsRef = useRef<AnimationPlaybackControls[]>([])
   const releaseAnimationIdRef = useRef(0)
@@ -498,6 +499,25 @@ export function Grid() {
   }, [])
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '/') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        return
+      }
+      const input = searchInputRef.current
+      if (!input) return
+      e.preventDefault()
+      input.focus()
+      input.select()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
     const onPreferenceChange = () => {
       prefersReducedMotionRef.current = media.matches
@@ -538,7 +558,6 @@ export function Grid() {
   const searchSuggestions = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase()
     if (isSubnameSearch(trimmed)) return []
-    if (trimmed.endsWith('.eth')) return []
 
     const query = trimmed.replace(/\.eth$/, '')
     if (query.length < 2) return []
@@ -611,7 +630,7 @@ export function Grid() {
         sizeRef.current,
       )
       setSearchQuery(target.name)
-      setSearchMessage(`Focused ${target.name}`)
+      setSearchMessage('')
       setSearchHasWarning(false)
       setFocusedCellKey(target.key)
       animateViewportTo({
@@ -644,7 +663,7 @@ export function Grid() {
         sizeRef.current,
       )
       setSearchQuery(target.name)
-      setSearchMessage(`Focused ${target.name}`)
+      setSearchMessage('')
       setSearchHasWarning(false)
       setFocusedCellKey(target.key)
       animateViewportTo({
@@ -686,13 +705,16 @@ export function Grid() {
         onSubmit={onSearchSubmit}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <label htmlFor="ens-search">ENS name</label>
+        <label htmlFor="ens-search" className="visually-hidden">
+          ENS name
+        </label>
         <div className="search-row">
           <input
             id="ens-search"
+            ref={searchInputRef}
             type="search"
             value={searchQuery}
-            placeholder="Search ENS"
+            placeholder="vitalik.eth"
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => {
@@ -707,17 +729,18 @@ export function Grid() {
           <button type="submit">Focus</button>
         </div>
         {searchSuggestions.length > 0 && (
-          <div className="search-suggestions">
-            {searchSuggestions.map((name) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => focusSearchValue(name)}
-              >
-                {name}
-              </button>
+          <ul className="search-suggestions">
+            {searchSuggestions.map((name, i) => (
+              <li key={name}>
+                <button type="button" onClick={() => focusSearchValue(name)}>
+                  <span className="sug-num">
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <span className="sug-name">{name}</span>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
         <div
           id="search-status"

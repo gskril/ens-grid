@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { getAvatarUrl, type Profile } from './api'
-import { ProfileLinks } from './ProfileLinks'
+import { ProfileLinks, countRecords } from './ProfileLinks'
 
 interface ProfileModalProps {
   name: string
@@ -17,6 +17,8 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const recordCount = profile ? countRecords(profile) : 0
+
   return (
     <div
       id="modal"
@@ -31,22 +33,41 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
         if (e.key === 'Escape') onClose()
       }}
     >
-      <div className="modal-content">
+      <div className="modal-card">
         <button className="modal-close" onClick={onClose} aria-label="Close">
-          &times;
+          ✕
         </button>
-        <img
-          className="modal-avatar"
-          src={profile?.avatarUrl || getAvatarUrl(name, 'md')}
-          alt={name}
-        />
-        <h2 id="modal-title" className="modal-name">
-          {name}
-        </h2>
-        {profile?.description && (
-          <p className="modal-description">{profile.description}</p>
-        )}
-        {profile && <ProfileLinks profile={profile} />}
+
+        <div className="modal-body">
+          <div className="modal-avatar-wrap">
+            <img
+              className="modal-avatar"
+              src={profile?.avatarUrl || getAvatarUrl(name, 'md')}
+              alt={name}
+            />
+          </div>
+
+          <div className="modal-content">
+            <h2 id="modal-title" className="modal-name">
+              {name}
+            </h2>
+            {profile?.description && (
+              <p className="modal-description">{profile.description}</p>
+            )}
+
+            {profile && recordCount > 0 ? (
+              <ProfileLinks profile={profile} />
+            ) : (
+              <p className="modal-empty">— No public records on file —</p>
+            )}
+          </div>
+        </div>
+
+        <footer className="modal-footer">
+          <span>
+            <kbd>esc</kbd> to close
+          </span>
+        </footer>
       </div>
     </div>
   )
