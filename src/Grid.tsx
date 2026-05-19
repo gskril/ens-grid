@@ -169,8 +169,13 @@ function normalizeSearchName(value: string): string {
   return trimmed.endsWith('.eth') ? trimmed : `${trimmed}.eth`
 }
 
+function isSubnameSearch(value: string): boolean {
+  return value.trim().split('.').length > 2
+}
+
 function getExactSearchWarning(value: string): string {
   const trimmed = value.trim().toLowerCase()
+  if (isSubnameSearch(trimmed)) return 'subnames are not supported'
   if (!trimmed.endsWith('.eth')) return ''
 
   const normalized = normalizeSearchName(trimmed)
@@ -181,6 +186,8 @@ function getExactSearchWarning(value: string): string {
 
 function findMatchingNameIndex(query: string): number {
   const trimmed = query.trim().toLowerCase()
+  if (isSubnameSearch(trimmed)) return -1
+
   const normalized = normalizeSearchName(query)
   if (!normalized) return -1
 
@@ -197,6 +204,8 @@ function findMatchingNameIndex(query: string): number {
 }
 
 function findExactNameIndex(value: string): number {
+  if (isSubnameSearch(value)) return -1
+
   const normalized = normalizeSearchName(value)
   if (!normalized) return -1
 
@@ -528,6 +537,7 @@ export function Grid() {
 
   const searchSuggestions = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase()
+    if (isSubnameSearch(trimmed)) return []
     if (trimmed.endsWith('.eth')) return []
 
     const query = trimmed.replace(/\.eth$/, '')
@@ -617,11 +627,13 @@ export function Grid() {
       const targetIndex = findExactNameIndex(value)
       if (targetIndex < 0) {
         const normalized = normalizeSearchName(value)
+        const exactWarning = getExactSearchWarning(value)
         setSearchQuery(normalized)
         setSearchMessage(
-          normalized ? `${normalized} does not have a functioning avatar` : '',
+          exactWarning ||
+          (normalized ? `${normalized} does not have a functioning avatar` : ''),
         )
-        setSearchHasWarning(Boolean(normalized))
+        setSearchHasWarning(Boolean(exactWarning || normalized))
         setFocusedCellKey(null)
         return
       }
