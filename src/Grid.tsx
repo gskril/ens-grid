@@ -43,6 +43,35 @@ export function Grid() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const ds = dragState.current
+      if (!ds.isDragging) return
+      const dx = e.clientX - ds.lastX
+      const dy = e.clientY - ds.lastY
+      if (
+        Math.abs(e.clientX - ds.startX) > 5 ||
+        Math.abs(e.clientY - ds.startY) > 5
+      ) {
+        ds.hasMoved = true
+      }
+      ds.lastX = e.clientX
+      ds.lastY = e.clientY
+      setViewport((v) => ({ x: v.x - dx, y: v.y - dy }))
+    }
+    const onUp = () => {
+      dragState.current.isDragging = false
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
+  }, [])
+
   const cells = useMemo<CellInfo[]>(() => {
     const cols = Math.ceil(size.w / CELL_SIZE) + 2
     const rows = Math.ceil(size.h / CELL_SIZE) + 2
@@ -77,31 +106,6 @@ export function Grid() {
       lastX: e.clientX,
       lastY: e.clientY,
     }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }, [])
-
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    const ds = dragState.current
-    if (!ds.isDragging) return
-    const dx = e.clientX - ds.lastX
-    const dy = e.clientY - ds.lastY
-    if (
-      Math.abs(e.clientX - ds.startX) > 5 ||
-      Math.abs(e.clientY - ds.startY) > 5
-    ) {
-      ds.hasMoved = true
-    }
-    ds.lastX = e.clientX
-    ds.lastY = e.clientY
-    setViewport((v) => ({ x: v.x - dx, y: v.y - dy }))
-  }, [])
-
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    dragState.current.isDragging = false
-    const el = e.currentTarget as HTMLElement
-    if (el.hasPointerCapture(e.pointerId)) {
-      el.releasePointerCapture(e.pointerId)
-    }
   }, [])
 
   const onCellClick = useCallback(
@@ -113,13 +117,7 @@ export function Grid() {
   )
 
   return (
-    <div
-      id="grid-container"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    >
+    <div id="grid-container" onPointerDown={onPointerDown}>
       {cells.map((cell) => (
         <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
       ))}
