@@ -397,6 +397,10 @@ html, body {
   .modal-name {
     font-size: 30px !important;
   }
+
+  .modal-footer {
+    display: none;
+  }
 }
 
 .modal-avatar-wrap {
