@@ -28,6 +28,7 @@ const RELEASE_SPRING = {
 }
 const FOCUS_SEARCH_RADIUS_ROWS = 4096
 const FOCUS_DURATION = 1.2
+const FOCUS_TRAVEL_DISTANCE = CELL_SIZE * 14
 const COL_STEP = 7919
 const ROW_STEP = 104729
 const ensNameSet = new Set(ensNames)
@@ -279,6 +280,7 @@ export function Grid() {
   const [searchMessage, setSearchMessage] = useState('')
   const [searchHasWarning, setSearchHasWarning] = useState(false)
   const [focusedCellKey, setFocusedCellKey] = useState<string | null>(null)
+  const [isTravelingToFocus, setIsTravelingToFocus] = useState(false)
   const navigate = useNavigate()
   const pathname = useLocation({
     select: (location) => location.pathname,
@@ -332,6 +334,7 @@ export function Grid() {
   const settleViewport = useCallback(
     (velocityX = 0, velocityY = 0) => {
       stopReleaseMotion()
+      setIsTravelingToFocus(false)
 
       if (prefersReducedMotionRef.current) {
         viewportRef.current = getSettledViewport(viewportRef.current)
@@ -394,6 +397,7 @@ export function Grid() {
       stopReleaseMotion()
 
       if (prefersReducedMotionRef.current) {
+        setIsTravelingToFocus(false)
         viewportRef.current = target
         renderViewport()
         return
@@ -402,6 +406,9 @@ export function Grid() {
       const animationId = releaseAnimationIdRef.current + 1
       releaseAnimationIdRef.current = animationId
       const latest = { ...viewportRef.current }
+      const distance = Math.hypot(target.x - latest.x, target.y - latest.y)
+      const shouldPauseAvatarLoading = distance > FOCUS_TRAVEL_DISTANCE
+      setIsTravelingToFocus(shouldPauseAvatarLoading)
 
       const commitLatest = () => {
         viewportRef.current = latest
@@ -433,6 +440,7 @@ export function Grid() {
           viewportRef.current = target
           renderViewport()
           releaseAnimationsRef.current = []
+          setIsTravelingToFocus(false)
         })
         .catch(() => {})
     },
@@ -585,6 +593,7 @@ export function Grid() {
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return
     stopReleaseMotion()
+    setIsTravelingToFocus(false)
     const now = performance.now()
     dragState.current = {
       isDragging: true,
@@ -696,6 +705,8 @@ export function Grid() {
             cell={cell}
             onClick={onCellClick}
             isFocused={cell.key === focusedCellKey}
+            loadImage={!isTravelingToFocus}
+            isPriority={cell.key === focusedCellKey}
           />
         ))}
       </div>

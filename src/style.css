@@ -61,6 +61,19 @@ html, body {
   box-shadow: 0 0 0 2px #0a84ff, 0 8px 24px rgba(10, 132, 255, 0.25);
 }
 
+.avatar-cell.is-placeholder {
+  cursor: default;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.38), rgba(255, 255, 255, 0)),
+    #d9d9de;
+}
+
+.avatar-cell.is-placeholder:hover {
+  z-index: auto;
+  box-shadow: none;
+}
+
 .avatar-cell.is-focused {
   z-index: 20;
   box-shadow: 0 0 0 3px #ffcc00, 0 10px 32px rgba(255, 204, 0, 0.38);
