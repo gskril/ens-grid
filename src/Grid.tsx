@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { ensNames } from './names'
-import { getAvatarUrl, type Profile, fetchProfile } from './api'
-import { ProfileModal } from './ProfileModal'
+import { AvatarCell } from './AvatarCell'
 
 const AVATAR_SIZE = 80
 const GAP = 8
@@ -12,24 +12,20 @@ function getNameForCell(col: number, row: number): string {
   return ensNames[index]
 }
 
-interface CellInfo {
+export interface CellInfo {
   key: string
-  col: number
-  row: number
   name: string
   x: number
   y: number
 }
 
-export function App() {
-  const containerRef = useRef<HTMLDivElement>(null)
+export function Grid() {
   const [viewport, setViewport] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({
     w: typeof window !== 'undefined' ? window.innerWidth : 1024,
     h: typeof window !== 'undefined' ? window.innerHeight : 768,
   })
-  const [selectedName, setSelectedName] = useState<string | null>(null)
-  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
+  const navigate = useNavigate()
 
   const dragState = useRef({
     isDragging: false,
@@ -41,7 +37,8 @@ export function App() {
   })
 
   useEffect(() => {
-    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight })
+    const onResize = () =>
+      setSize({ w: window.innerWidth, h: window.innerHeight })
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -51,8 +48,8 @@ export function App() {
     const rows = Math.ceil(size.h / CELL_SIZE) + 2
     const startCol = Math.floor(viewport.x / CELL_SIZE)
     const startRow = Math.floor(viewport.y / CELL_SIZE)
-    const offsetX = -((viewport.x % CELL_SIZE + CELL_SIZE) % CELL_SIZE)
-    const offsetY = -((viewport.y % CELL_SIZE + CELL_SIZE) % CELL_SIZE)
+    const offsetX = -(((viewport.x % CELL_SIZE) + CELL_SIZE) % CELL_SIZE)
+    const offsetY = -(((viewport.y % CELL_SIZE) + CELL_SIZE) % CELL_SIZE)
 
     const out: CellInfo[] = []
     for (let r = 0; r < rows; r++) {
@@ -61,8 +58,6 @@ export function App() {
         const row = startRow + r
         out.push({
           key: `${col},${row}`,
-          col,
-          row,
           name: getNameForCell(col, row),
           x: offsetX + c * CELL_SIZE,
           y: offsetY + r * CELL_SIZE,
@@ -102,77 +97,32 @@ export function App() {
   }, [])
 
   const onPointerUp = useCallback((e: React.PointerEvent) => {
-    const ds = dragState.current
-    ds.isDragging = false
-    if ((e.currentTarget as HTMLElement).hasPointerCapture(e.pointerId)) {
-      ;(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId)
+    dragState.current.isDragging = false
+    const el = e.currentTarget as HTMLElement
+    if (el.hasPointerCapture(e.pointerId)) {
+      el.releasePointerCapture(e.pointerId)
     }
   }, [])
 
-  const onCellClick = useCallback(async (name: string) => {
-    if (dragState.current.hasMoved) return
-    setSelectedName(name)
-    setSelectedProfile(null)
-    const profile = await fetchProfile(name)
-    setSelectedName((current) => {
-      if (current === name) setSelectedProfile(profile)
-      return current
-    })
-  }, [])
-
-  const closeModal = useCallback(() => {
-    setSelectedName(null)
-    setSelectedProfile(null)
-  }, [])
-
-  return (
-    <>
-      <div
-        id="grid-container"
-        ref={containerRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        {cells.map((cell) => (
-          <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
-        ))}
-      </div>
-      {selectedName && (
-        <ProfileModal
-          name={selectedName}
-          profile={selectedProfile}
-          onClose={closeModal}
-        />
-      )}
-    </>
+  const onCellClick = useCallback(
+    (name: string) => {
+      if (dragState.current.hasMoved) return
+      navigate({ to: '/$name', params: { name } })
+    },
+    [navigate],
   )
-}
 
-interface AvatarCellProps {
-  cell: CellInfo
-  onClick: (name: string) => void
-}
-
-function AvatarCell({ cell, onClick }: AvatarCellProps) {
-  const [failed, setFailed] = useState(false)
   return (
     <div
-      className={`avatar-cell${failed ? ' no-avatar' : ''}`}
-      style={{ transform: `translate(${cell.x}px, ${cell.y}px)` }}
-      onClick={() => onClick(cell.name)}
-      title={cell.name}
+      id="grid-container"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
-      {!failed && (
-        <img
-          src={getAvatarUrl(cell.name)}
-          alt={cell.name}
-          loading="lazy"
-          draggable={false}
-          onError={() => setFailed(true)}
-        />
-      )}
+      {cells.map((cell) => (
+        <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
+      ))}
     </div>
   )
 }

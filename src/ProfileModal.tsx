@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { getAvatarUrl, type Profile } from './api'
+import { ProfileLinks } from './ProfileLinks'
 
 interface ProfileModalProps {
   name: string
@@ -19,7 +20,6 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
   return (
     <div
       id="modal"
-      className="open"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
@@ -37,35 +37,7 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
         {profile?.description && (
           <p className="modal-description">{profile.description}</p>
         )}
-        <div className="modal-links">
-          {profile?.url && (
-            <a href={profile.url} target="_blank" rel="noopener noreferrer">
-              Website
-            </a>
-          )}
-          {profile?.twitter && (
-            <a
-              href={`https://x.com/${profile.twitter.replace('@', '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              @{profile.twitter.replace('@', '')}
-            </a>
-          )}
-          {profile?.github && (
-            <a
-              href={`https://github.com/${profile.github.replace('@', '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              github/{profile.github.replace('@', '')}
-            </a>
-          )}
-          {profile?.discord && <span>Discord: {profile.discord}</span>}
-          {profile?.email && (
-            <a href={`mailto:${profile.email}`}>{profile.email}</a>
-          )}
-        </div>
+        {profile && <ProfileLinks profile={profile} />}
       </div>
     </div>
   )
