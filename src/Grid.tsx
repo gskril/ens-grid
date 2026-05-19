@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { animate, spring, type AnimationPlaybackControls } from 'motion'
 import { ensNames } from './names'
 import { AvatarCell } from './AvatarCell'
@@ -26,9 +26,40 @@ const RELEASE_SPRING = {
   restDelta: 0.5,
   restSpeed: 12,
 }
+const FOCUS_SEARCH_RADIUS_ROWS = 4096
+const FOCUS_DURATION = 1.2
+const COL_STEP = 7919
+const ROW_STEP = 104729
+const ensNameSet = new Set(ensNames)
+
+function mod(value: number, divisor: number): number {
+  return ((value % divisor) + divisor) % divisor
+}
+
+function modularInverse(value: number, modulus: number): number {
+  let oldR = value
+  let r = modulus
+  let oldS = 1
+  let s = 0
+
+  while (r !== 0) {
+    const quotient = Math.floor(oldR / r)
+    const nextR = oldR - quotient * r
+    oldR = r
+    r = nextR
+
+    const nextS = oldS - quotient * s
+    oldS = s
+    s = nextS
+  }
+
+  return mod(oldS, modulus)
+}
+
+const COL_STEP_INVERSE = modularInverse(COL_STEP, ensNames.length)
 
 function getNameForCell(col: number, row: number): string {
-  const index = Math.abs((col * 7919 + row * 104729) % ensNames.length)
+  const index = Math.abs((col * COL_STEP + row * ROW_STEP) % ensNames.length)
   return ensNames[index]
 }
 
@@ -54,6 +85,15 @@ interface GridWindow {
   rows: number
   startCol: number
   startRow: number
+}
+
+interface FocusTarget {
+  col: number
+  row: number
+  key: string
+  name: string
+  x: number
+  y: number
 }
 
 function getSize(): Size {
@@ -123,6 +163,96 @@ function getReleaseTarget(
   })
 }
 
+function normalizeSearchName(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed) return ''
+  return trimmed.endsWith('.eth') ? trimmed : `${trimmed}.eth`
+}
+
+function getExactSearchWarning(value: string): string {
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed.endsWith('.eth')) return ''
+
+  const normalized = normalizeSearchName(trimmed)
+  if (!normalized || ensNameSet.has(normalized)) return ''
+
+  return `${normalized} does not have a functioning avatar`
+}
+
+function findMatchingNameIndex(query: string): number {
+  const trimmed = query.trim().toLowerCase()
+  const normalized = normalizeSearchName(query)
+  if (!normalized) return -1
+
+  const exactIndex = findExactNameIndex(normalized)
+  if (exactIndex >= 0) return exactIndex
+
+  if (trimmed.endsWith('.eth')) return -1
+
+  const bareQuery = normalized.replace(/\.eth$/, '')
+  const prefixIndex = ensNames.findIndex((name) => name.startsWith(bareQuery))
+  if (prefixIndex >= 0) return prefixIndex
+
+  return ensNames.findIndex((name) => name.includes(bareQuery))
+}
+
+function findExactNameIndex(value: string): number {
+  const normalized = normalizeSearchName(value)
+  if (!normalized) return -1
+
+  return ensNames.findIndex((name) => name === normalized)
+}
+
+function getNearestFocusTarget(
+  targetIndex: number,
+  viewport: Viewport,
+  size: Size,
+): FocusTarget {
+  const centerCol = (viewport.x + size.w / 2 - AVATAR_SIZE / 2) / CELL_SIZE
+  const centerRow = (viewport.y + size.h / 2 - AVATAR_SIZE / 2) / CELL_SIZE
+  const middleRow = Math.round(centerRow)
+  let best: FocusTarget | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+
+  for (
+    let row = middleRow - FOCUS_SEARCH_RADIUS_ROWS;
+    row <= middleRow + FOCUS_SEARCH_RADIUS_ROWS;
+    row += 1
+  ) {
+    for (const signedIndex of [targetIndex, -targetIndex]) {
+      const baseCol = mod(
+        (signedIndex - row * ROW_STEP) * COL_STEP_INVERSE,
+        ensNames.length,
+      )
+      const nearestWrap = Math.round((centerCol - baseCol) / ensNames.length)
+      const col = baseCol + nearestWrap * ensNames.length
+      const name = ensNames[targetIndex]
+
+      if (getNameForCell(col, row) !== name) continue
+
+      const distance = (col - centerCol) ** 2 + (row - centerRow) ** 2
+
+      if (distance < bestDistance) {
+        bestDistance = distance
+        best = {
+          col,
+          row,
+          key: `${col},${row}`,
+          name,
+          x: col * CELL_SIZE,
+          y: row * CELL_SIZE,
+        }
+      }
+    }
+  }
+
+  if (!best) {
+    throw new Error('Unable to locate matching grid cell')
+  }
+
+  return best
+}
+
 export function Grid() {
   const viewportRef = useRef<Viewport>({ x: 0, y: 0 })
   const sizeRef = useRef<Size>(getSize())
@@ -135,7 +265,20 @@ export function Grid() {
     getGridWindow(viewportRef.current, sizeRef.current),
   )
   const [gridWindow, setGridWindow] = useState(gridWindowRef.current)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMessage, setSearchMessage] = useState('')
+  const [searchHasWarning, setSearchHasWarning] = useState(false)
+  const [focusedCellKey, setFocusedCellKey] = useState<string | null>(null)
   const navigate = useNavigate()
+  const pathname = useLocation({
+    select: (location) => location.pathname,
+  })
+  const routeName = useMemo(() => {
+    if (pathname === '/') return null
+    const segment = pathname.replace(/^\/+/, '').split('/')[0]
+    if (!segment) return null
+    return decodeURIComponent(segment)
+  }, [pathname])
 
   const dragState = useRef({
     isDragging: false,
@@ -217,6 +360,56 @@ export function Grid() {
       const yAnimation = animate(latest.y, target.y, {
         ...RELEASE_SPRING,
         velocity: releaseVelocity.y * 1000,
+        onUpdate: (value) => {
+          latest.y = value
+          commitLatest()
+        },
+      })
+
+      releaseAnimationsRef.current = [xAnimation, yAnimation]
+      Promise.all([xAnimation.finished, yAnimation.finished])
+        .then(() => {
+          if (releaseAnimationIdRef.current !== animationId) return
+          viewportRef.current = target
+          renderViewport()
+          releaseAnimationsRef.current = []
+        })
+        .catch(() => {})
+    },
+    [renderViewport, stopReleaseMotion],
+  )
+
+  const animateViewportTo = useCallback(
+    (target: Viewport) => {
+      stopReleaseMotion()
+
+      if (prefersReducedMotionRef.current) {
+        viewportRef.current = target
+        renderViewport()
+        return
+      }
+
+      const animationId = releaseAnimationIdRef.current + 1
+      releaseAnimationIdRef.current = animationId
+      const latest = { ...viewportRef.current }
+
+      const commitLatest = () => {
+        viewportRef.current = latest
+        renderViewport()
+      }
+
+      const xAnimation = animate(latest.x, target.x, {
+        duration: FOCUS_DURATION,
+        ease: [0.22, 1, 0.36, 1],
+        onUpdate: (value) => {
+          latest.x = value
+          commitLatest()
+        },
+      })
+
+      const yAnimation = animate(latest.y, target.y, {
+        duration: FOCUS_DURATION,
+        ease: [0.22, 1, 0.36, 1],
         onUpdate: (value) => {
           latest.y = value
           commitLatest()
@@ -333,6 +526,23 @@ export function Grid() {
     return out
   }, [gridWindow])
 
+  const searchSuggestions = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase()
+    if (trimmed.endsWith('.eth')) return []
+
+    const query = trimmed.replace(/\.eth$/, '')
+    if (query.length < 2) return []
+
+    const matches: string[] = []
+    for (const name of ensNames) {
+      if (name.startsWith(query) || name.includes(query)) {
+        matches.push(name)
+        if (matches.length === 6) break
+      }
+    }
+    return matches
+  }, [searchQuery])
+
   useEffect(() => {
     renderViewport()
     return () => {
@@ -368,13 +578,144 @@ export function Grid() {
     [navigate],
   )
 
+  const focusSearchValue = useCallback(
+    (value: string) => {
+      const targetIndex = findMatchingNameIndex(value)
+      if (targetIndex < 0) {
+        const normalized = normalizeSearchName(value)
+        const exactWarning = getExactSearchWarning(value)
+        setSearchMessage(
+          exactWarning ||
+          (normalized
+            ? `${normalized} does not have a functioning avatar`
+            : 'Enter an ENS name to search'),
+        )
+        setSearchHasWarning(true)
+        setFocusedCellKey(null)
+        return
+      }
+
+      const target = getNearestFocusTarget(
+        targetIndex,
+        viewportRef.current,
+        sizeRef.current,
+      )
+      setSearchQuery(target.name)
+      setSearchMessage(`Focused ${target.name}`)
+      setSearchHasWarning(false)
+      setFocusedCellKey(target.key)
+      animateViewportTo({
+        x: target.x + AVATAR_SIZE / 2 - sizeRef.current.w / 2,
+        y: target.y + AVATAR_SIZE / 2 - sizeRef.current.h / 2,
+      })
+    },
+    [animateViewportTo],
+  )
+
+  const focusExactName = useCallback(
+    (value: string) => {
+      const targetIndex = findExactNameIndex(value)
+      if (targetIndex < 0) {
+        const normalized = normalizeSearchName(value)
+        setSearchQuery(normalized)
+        setSearchMessage(
+          normalized ? `${normalized} does not have a functioning avatar` : '',
+        )
+        setSearchHasWarning(Boolean(normalized))
+        setFocusedCellKey(null)
+        return
+      }
+
+      const target = getNearestFocusTarget(
+        targetIndex,
+        viewportRef.current,
+        sizeRef.current,
+      )
+      setSearchQuery(target.name)
+      setSearchMessage(`Focused ${target.name}`)
+      setSearchHasWarning(false)
+      setFocusedCellKey(target.key)
+      animateViewportTo({
+        x: target.x + AVATAR_SIZE / 2 - sizeRef.current.w / 2,
+        y: target.y + AVATAR_SIZE / 2 - sizeRef.current.h / 2,
+      })
+    },
+    [animateViewportTo],
+  )
+
+  useEffect(() => {
+    if (!routeName) return
+    focusExactName(routeName)
+  }, [focusExactName, routeName])
+
+  const onSearchSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      focusSearchValue(searchQuery)
+    },
+    [focusSearchValue, searchQuery],
+  )
+
   return (
     <div id="grid-container" onPointerDown={onPointerDown}>
       <div id="grid-layer" ref={layerRef}>
         {cells.map((cell) => (
-          <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
+          <AvatarCell
+            key={cell.key}
+            cell={cell}
+            onClick={onCellClick}
+            isFocused={cell.key === focusedCellKey}
+          />
         ))}
       </div>
+      <form
+        id="search-panel"
+        role="search"
+        onSubmit={onSearchSubmit}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <label htmlFor="ens-search">ENS name</label>
+        <div className="search-row">
+          <input
+            id="ens-search"
+            type="search"
+            value={searchQuery}
+            placeholder="Search ENS"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => {
+              const nextValue = e.target.value
+              const exactWarning = getExactSearchWarning(nextValue)
+              setSearchQuery(nextValue)
+              setSearchMessage(exactWarning)
+              setSearchHasWarning(Boolean(exactWarning))
+              if (exactWarning) setFocusedCellKey(null)
+            }}
+          />
+          <button type="submit">Focus</button>
+        </div>
+        {searchSuggestions.length > 0 && (
+          <div className="search-suggestions">
+            {searchSuggestions.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => focusSearchValue(name)}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
+        <div
+          id="search-status"
+          className={searchHasWarning ? 'is-warning' : ''}
+          role="status"
+          aria-live="polite"
+        >
+          {searchMessage}
+        </div>
+      </form>
     </div>
   )
 }

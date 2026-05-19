@@ -61,6 +61,12 @@ html, body {
   box-shadow: 0 0 0 2px #0a84ff, 0 8px 24px rgba(10, 132, 255, 0.25);
 }
 
+.avatar-cell.is-focused {
+  z-index: 20;
+  box-shadow: 0 0 0 3px #ffcc00, 0 10px 32px rgba(255, 204, 0, 0.38);
+  animation: focus-pulse 1.4s ease-in-out infinite;
+}
+
 .avatar-cell img {
   width: 100%;
   height: 100%;
@@ -71,6 +77,109 @@ html, body {
 
 .avatar-cell.no-avatar {
   background: linear-gradient(135deg, #e5e5ea 0%, #d1d1d6 100%);
+}
+
+#search-panel {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 100;
+  width: min(360px, calc(100vw - 32px));
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(12px);
+  cursor: default;
+}
+
+#search-panel label {
+  display: block;
+  margin-bottom: 6px;
+  color: #555;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+#ens-search {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #d1d1d6;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+#ens-search:focus {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.16);
+}
+
+.search-row button,
+.search-suggestions button {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.search-row button {
+  height: 38px;
+  padding: 0 14px;
+  background: #0a84ff;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.search-row button:hover {
+  background: #006edb;
+}
+
+.search-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.search-suggestions button {
+  max-width: 100%;
+  padding: 6px 9px;
+  overflow: hidden;
+  background: #f0f0f3;
+  color: #333;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-suggestions button:hover {
+  background: #e5e5ea;
+}
+
+#search-status {
+  min-height: 17px;
+  margin-top: 7px;
+  color: #555;
+  font-size: 12px;
+}
+
+#search-status.is-warning {
+  color: #b42318;
+  font-weight: 600;
 }
 
 #modal {
@@ -166,4 +275,21 @@ html, body {
 
 .modal-links span {
   color: #555;
+}
+
+@keyframes focus-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px #ffcc00, 0 10px 32px rgba(255, 204, 0, 0.38);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px #ffcc00, 0 14px 40px rgba(255, 204, 0, 0.48);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-cell.is-focused {
+    animation: none;
+  }
 }
