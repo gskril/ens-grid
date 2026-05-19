@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { getAvatarUrl } from './api'
 import type { CellInfo } from './Grid'
 
@@ -7,10 +7,14 @@ interface AvatarCellProps {
   onClick: (name: string) => void
 }
 
-export function AvatarCell({ cell, onClick }: AvatarCellProps) {
+export const AvatarCell = memo(function AvatarCell({
+  cell,
+  onClick,
+}: AvatarCellProps) {
   const [failed, setFailed] = useState(false)
   return (
-    <div
+    <button
+      type="button"
       className={`avatar-cell${failed ? ' no-avatar' : ''}`}
       style={{ transform: `translate(${cell.x}px, ${cell.y}px)` }}
       onClick={() => onClick(cell.name)}
@@ -25,6 +29,6 @@ export function AvatarCell({ cell, onClick }: AvatarCellProps) {
           onError={() => setFailed(true)}
         />
       )}
-    </div>
+    </button>
   )
-}
+})

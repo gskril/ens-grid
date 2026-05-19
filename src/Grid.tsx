@@ -19,12 +19,64 @@ export interface CellInfo {
   y: number
 }
 
-export function Grid() {
-  const [viewport, setViewport] = useState({ x: 0, y: 0 })
-  const [size, setSize] = useState({
+interface Size {
+  w: number
+  h: number
+}
+
+interface Viewport {
+  x: number
+  y: number
+}
+
+interface GridWindow {
+  cols: number
+  rows: number
+  startCol: number
+  startRow: number
+}
+
+function getSize(): Size {
+  return {
     w: typeof window !== 'undefined' ? window.innerWidth : 1024,
     h: typeof window !== 'undefined' ? window.innerHeight : 768,
-  })
+  }
+}
+
+function getGridWindow(viewport: Viewport, size: Size): GridWindow {
+  return {
+    cols: Math.ceil(size.w / CELL_SIZE) + 2,
+    rows: Math.ceil(size.h / CELL_SIZE) + 2,
+    startCol: Math.floor(viewport.x / CELL_SIZE),
+    startRow: Math.floor(viewport.y / CELL_SIZE),
+  }
+}
+
+function getLayerOffset(viewport: Viewport): { x: number; y: number } {
+  return {
+    x: -(((viewport.x % CELL_SIZE) + CELL_SIZE) % CELL_SIZE),
+    y: -(((viewport.y % CELL_SIZE) + CELL_SIZE) % CELL_SIZE),
+  }
+}
+
+function sameGridWindow(a: GridWindow, b: GridWindow): boolean {
+  return (
+    a.cols === b.cols &&
+    a.rows === b.rows &&
+    a.startCol === b.startCol &&
+    a.startRow === b.startRow
+  )
+}
+
+export function Grid() {
+  const viewportRef = useRef<Viewport>({ x: 0, y: 0 })
+  const sizeRef = useRef<Size>(getSize())
+  const layerRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<number | null>(null)
+  const gridWindowRef = useRef<GridWindow>(
+    getGridWindow(viewportRef.current, sizeRef.current),
+  )
+  const [gridWindow, setGridWindow] = useState(gridWindowRef.current)
   const navigate = useNavigate()
 
   const dragState = useRef({
@@ -36,12 +88,34 @@ export function Grid() {
     lastY: 0,
   })
 
+  const applyViewport = useCallback(() => {
+    frameRef.current = null
+
+    const offset = getLayerOffset(viewportRef.current)
+    if (layerRef.current) {
+      layerRef.current.style.transform = `translate3d(${offset.x}px, ${offset.y}px, 0)`
+    }
+
+    const nextGridWindow = getGridWindow(viewportRef.current, sizeRef.current)
+    if (!sameGridWindow(gridWindowRef.current, nextGridWindow)) {
+      gridWindowRef.current = nextGridWindow
+      setGridWindow(nextGridWindow)
+    }
+  }, [])
+
+  const scheduleViewportApply = useCallback(() => {
+    if (frameRef.current !== null) return
+    frameRef.current = requestAnimationFrame(applyViewport)
+  }, [applyViewport])
+
   useEffect(() => {
-    const onResize = () =>
-      setSize({ w: window.innerWidth, h: window.innerHeight })
+    const onResize = () => {
+      sizeRef.current = getSize()
+      scheduleViewportApply()
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
-  }, [])
+  }, [scheduleViewportApply])
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -57,7 +131,11 @@ export function Grid() {
       }
       ds.lastX = e.clientX
       ds.lastY = e.clientY
-      setViewport((v) => ({ x: v.x - dx, y: v.y - dy }))
+      viewportRef.current = {
+        x: viewportRef.current.x - dx,
+        y: viewportRef.current.y - dy,
+      }
+      scheduleViewportApply()
     }
     const onUp = () => {
       dragState.current.isDragging = false
@@ -70,31 +148,33 @@ export function Grid() {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onUp)
     }
-  }, [])
+  }, [scheduleViewportApply])
 
   const cells = useMemo<CellInfo[]>(() => {
-    const cols = Math.ceil(size.w / CELL_SIZE) + 2
-    const rows = Math.ceil(size.h / CELL_SIZE) + 2
-    const startCol = Math.floor(viewport.x / CELL_SIZE)
-    const startRow = Math.floor(viewport.y / CELL_SIZE)
-    const offsetX = -(((viewport.x % CELL_SIZE) + CELL_SIZE) % CELL_SIZE)
-    const offsetY = -(((viewport.y % CELL_SIZE) + CELL_SIZE) % CELL_SIZE)
-
     const out: CellInfo[] = []
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const col = startCol + c
-        const row = startRow + r
+    for (let r = 0; r < gridWindow.rows; r++) {
+      for (let c = 0; c < gridWindow.cols; c++) {
+        const col = gridWindow.startCol + c
+        const row = gridWindow.startRow + r
         out.push({
           key: `${col},${row}`,
           name: getNameForCell(col, row),
-          x: offsetX + c * CELL_SIZE,
-          y: offsetY + r * CELL_SIZE,
+          x: c * CELL_SIZE,
+          y: r * CELL_SIZE,
         })
       }
     }
     return out
-  }, [viewport, size])
+  }, [gridWindow])
+
+  useEffect(() => {
+    applyViewport()
+    return () => {
+      if (frameRef.current !== null) {
+        cancelAnimationFrame(frameRef.current)
+      }
+    }
+  }, [applyViewport])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return
@@ -118,9 +198,11 @@ export function Grid() {
 
   return (
     <div id="grid-container" onPointerDown={onPointerDown}>
-      {cells.map((cell) => (
-        <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
-      ))}
+      <div id="grid-layer" ref={layerRef}>
+        {cells.map((cell) => (
+          <AvatarCell key={cell.key} cell={cell} onClick={onCellClick} />
+        ))}
+      </div>
     </div>
   )
 }

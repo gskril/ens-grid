@@ -34,16 +34,26 @@ html, body {
   cursor: grabbing;
 }
 
+#grid-layer {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
 .avatar-cell {
   position: absolute;
   width: 80px;
   height: 80px;
+  display: block;
+  appearance: none;
+  border: 0;
   border-radius: 12px;
+  padding: 0;
   overflow: hidden;
   background: #e5e5ea;
   cursor: pointer;
   transition: box-shadow 0.2s ease;
-  will-change: transform;
+  contain: layout paint;
 }
 
 .avatar-cell:hover {
@@ -70,7 +80,6 @@ html, body {
   width: 100%;
   height: 100%;
   background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;

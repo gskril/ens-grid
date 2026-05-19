@@ -20,8 +20,15 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
   return (
     <div
       id="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      tabIndex={-1}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose()
       }}
     >
       <div className="modal-content">
@@ -33,7 +40,9 @@ export function ProfileModal({ name, profile, onClose }: ProfileModalProps) {
           src={profile?.avatarUrl || getAvatarUrl(name, 'md')}
           alt={name}
         />
-        <h2 className="modal-name">{name}</h2>
+        <h2 id="modal-title" className="modal-name">
+          {name}
+        </h2>
         {profile?.description && (
           <p className="modal-description">{profile.description}</p>
         )}
