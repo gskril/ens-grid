@@ -50,7 +50,7 @@ function getNameForCell(col: number, row: number): string {
 
 function getAvatarUrl(name: string, size: 'sm' | 'md' = 'sm'): string {
   const width = size === 'md' ? 256 : 160
-  return `${API_BASE}/avatar/${name}?width=${width}&fallback=false`
+  return `${API_BASE}/avatar/${name}?width=${width}`
 }
 
 async function fetchProfile(name: string): Promise<Profile | null> {
