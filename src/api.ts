@@ -1,5 +1,3 @@
-export const API_BASE = 'https://ens-api.gregskril.com'
-
 export interface Profile {
   name: string
   avatarUrl: string
@@ -14,13 +12,15 @@ export interface Profile {
 
 export function getAvatarUrl(name: string, size: 'sm' | 'md' = 'sm'): string {
   const width = size === 'md' ? 256 : 160
-  return `${API_BASE}/avatar/${name}?width=${width}`
+  const baseUrl = 'https://ens-images.gregskril.com/mainnet'
+  return `${baseUrl}/avatar/${name}?width=${width}`
 }
 
 export async function fetchProfile(name: string): Promise<Profile | null> {
   try {
     const texts = 'description,com.twitter,com.github,url,email,com.discord'
-    const response = await fetch(`${API_BASE}/name/${name}?texts=${texts}`)
+    const baseUrl = 'https://ens-api.gregskril.com'
+    const response = await fetch(`${baseUrl}/name/${name}?texts=${texts}`)
     if (!response.ok) return null
     const data = await response.json()
     return {
